@@ -1,6 +1,5 @@
 import copy
 import http.server
-import json
 import logging
 import os
 import socketserver
@@ -12,9 +11,9 @@ from pathlib import Path
 
 import httpx
 import requests
+from fastmcp import FastMCP
 from oauthlib.oauth1 import Client as OAuth1Client
 from requests_oauthlib import OAuth1Session
-from fastmcp import FastMCP
 
 HTTP_METHODS = {
     "get",
@@ -84,7 +83,7 @@ def collect_comma_params(spec: dict) -> set[str]:
 
 
 def load_openapi_spec() -> dict:
-    url = "https://api.twitter.com/2/openapi.json"
+    url = "https://api.x.com/2/openapi.json"
     LOGGER.info("Fetching OpenAPI spec from %s", url)
     response = requests.get(url, timeout=30)
     response.raise_for_status()
@@ -105,9 +104,7 @@ def _callback_url(host: str, port: int, path: str) -> str:
     return f"http://{host}:{port}{path}"
 
 
-def _wait_for_callback(
-    host: str, port: int, path: str, timeout_seconds: int
-) -> tuple[str, str]:
+def _wait_for_callback(host: str, port: int, path: str, timeout_seconds: int) -> tuple[str, str]:
     params: dict[str, str | None] = {"oauth_token": None, "oauth_verifier": None}
     event = threading.Event()
 
@@ -255,9 +252,7 @@ def filter_openapi_spec(spec: dict) -> dict:
                     continue
                 operation_id = value.get("operationId")
                 operation_tags = [
-                    tag.lower()
-                    for tag in value.get("tags", [])
-                    if isinstance(tag, str)
+                    tag.lower() for tag in value.get("tags", []) if isinstance(tag, str)
                 ]
                 if allow_tags and not (set(operation_tags) & allow_tags):
                     continue
@@ -301,9 +296,7 @@ def get_auth_headers(oauth_token: str | None = None) -> dict:
     bearer_token = os.getenv("X_BEARER_TOKEN", "").strip()
     token = oauth_token or env_oauth_token or bearer_token
     if not token:
-        raise RuntimeError(
-            "Set X_BEARER_TOKEN or provide OAuth1 access token on startup."
-        )
+        raise RuntimeError("Set X_BEARER_TOKEN or provide OAuth1 access token on startup.")
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -361,6 +354,7 @@ def create_mcp() -> FastMCP:
     filtered_spec = filter_openapi_spec(spec)
     comma_params = collect_comma_params(filtered_spec)
     print_tool_list(filtered_spec)
+
     async def normalize_query_params(request: httpx.Request) -> None:
         if not comma_params:
             return
