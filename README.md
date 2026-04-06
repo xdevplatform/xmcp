@@ -84,9 +84,17 @@ allowlist.
 
 ## OAuth1 flow (startup behavior)
 
-On startup, the server opens a browser for OAuth1 consent and waits for the
-callback. Tokens are kept in memory only for the lifetime of the server
-process. Set `X_OAUTH_PRINT_TOKENS=1` to print tokens, or
+On startup, the server needs OAuth1 access tokens to sign requests.
+
+**Non-interactive mode (headless / CI):** Set `X_OAUTH_ACCESS_TOKEN` and
+`X_OAUTH_ACCESS_TOKEN_SECRET` in your `.env`. When both are present, the
+server skips the browser flow and uses them directly.
+
+**Interactive mode (default):** If the access token env vars are empty, the
+server opens a browser for OAuth1 consent and waits for the callback. Tokens
+are kept in memory only for the lifetime of the server process.
+
+Set `X_OAUTH_PRINT_TOKENS=1` to print tokens, or
 `X_OAUTH_PRINT_AUTH_HEADER=1` to print request headers.
 
 ## Available tool calls (allowlist-ready)
