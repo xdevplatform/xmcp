@@ -34,6 +34,8 @@ FastMCP. Streaming and webhook endpoints are excluded.
      - `X_API_DEBUG` (default `1`)
   - Tool filtering (optional, comma-separated):
     - `X_API_TOOL_ALLOWLIST`
+    - `X_API_TOOL_TAGS`
+    - `X_API_TOOL_DENYLIST`
    - Optional Grok test client:
      - `XAI_API_KEY`
      - `XAI_MODEL` (default `grok-4-1-fast`)
@@ -70,17 +72,38 @@ The MCP endpoint is `http://127.0.0.1:8000/mcp` by default.
 - Local client: point it to `http://127.0.0.1:8000/mcp`.
 - Remote client: tunnel your local server (e.g., ngrok) and use the public URL.
 
-## Whitelisting tools
+## Filtering tools
 
-Use `X_API_TOOL_ALLOWLIST` to load a small, explicit set of tools:
+Three environment variables control which tools are loaded from the OpenAPI
+spec. All are optional and comma-separated. Filtering is applied at startup,
+so restart the server after changes.
+
+- `X_API_TOOL_ALLOWLIST` - only load these operation IDs (explicit inclusion)
+- `X_API_TOOL_TAGS` - only load operations tagged with these OpenAPI tags
+  (case-insensitive)
+- `X_API_TOOL_DENYLIST` - exclude these operation IDs
+
+When multiple filters are set, an operation must pass all of them. Tags are
+checked first, then the allowlist, then the denylist.
+
+Examples:
 
 ```
+# Only load tools for posts and users
+X_API_TOOL_TAGS=Posts,Users
+
+# Load a small explicit set
 X_API_TOOL_ALLOWLIST=getUsersByUsername,createPosts,searchPostsRecent
+
+# Load everything except community notes
+X_API_TOOL_DENYLIST=createCommunityNotes,deleteCommunityNotes,evaluateCommunityNotes
+
+# Combine: only post tools, but exclude reposts
+X_API_TOOL_TAGS=Posts
+X_API_TOOL_DENYLIST=repostPost,unrepostPost
 ```
 
-Whitelisting is applied at startup when the OpenAPI spec is loaded, so restart
-the server after changes. See the full tool list below before building your
-allowlist.
+See the full tool list below before building your filters.
 
 ## OAuth1 flow (startup behavior)
 
