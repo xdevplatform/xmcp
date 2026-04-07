@@ -9,6 +9,16 @@ FastMCP. Streaming and webhook endpoints are excluded.
 - An X Developer Platform app (to get tokens)
 - Optional: an xAI API key if you want to run the Grok test client
 
+## Setup (Docker)
+
+```bash
+docker build -t xmcp .
+docker run --env-file .env -p 8000:8000 xmcp
+```
+
+Set `MCP_TRANSPORT=sse` in `.env` to serve SSE at `/sse` instead of
+Streamable HTTP at `/mcp`.
+
 ## Setup (local)
 
 1. Create a virtual environment and install dependencies:
@@ -31,6 +41,7 @@ FastMCP. Streaming and webhook endpoints are excluded.
      - `X_API_TIMEOUT` (default `30`)
      - `MCP_HOST` (default `127.0.0.1`)
      - `MCP_PORT` (default `8000`)
+     - `MCP_TRANSPORT` (default `http`; set to `sse` for SSE transport)
      - `X_API_DEBUG` (default `1`)
   - Tool filtering (optional, comma-separated):
     - `X_API_TOOL_ALLOWLIST`

@@ -468,8 +468,9 @@ def create_mcp() -> FastMCP:
 def main() -> None:
     host = os.getenv("MCP_HOST", "127.0.0.1")
     port = int(os.getenv("MCP_PORT", "8000"))
+    transport = os.getenv("MCP_TRANSPORT", "http")
     mcp = create_mcp()
-    mcp.run(transport="http", host=host, port=port)
+    mcp.run(transport=transport, host=host, port=port)
 
 
 if __name__ == "__main__":
