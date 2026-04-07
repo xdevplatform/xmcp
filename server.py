@@ -314,10 +314,18 @@ def build_oauth1_client() -> OAuth1Client:
         raise RuntimeError(
             "Missing X_OAUTH_CONSUMER_KEY or X_OAUTH_CONSUMER_SECRET for OAuth1 signing."
         )
-    access_token, access_secret = run_oauth1_flow()
-    if is_truthy(os.getenv("X_OAUTH_PRINT_TOKENS", "0")):
-        print("OAuth1 access token:", access_token)
-        print("OAuth1 access token secret:", access_secret)
+    access_token = os.getenv("X_OAUTH_ACCESS_TOKEN", "").strip()
+    access_secret = os.getenv("X_OAUTH_ACCESS_TOKEN_SECRET", "").strip()
+
+    if access_token and access_secret:
+        OAUTH_LOGGER.info(
+            "Using existing OAuth1 tokens from environment, skipping browser flow."
+        )
+    else:
+        access_token, access_secret = run_oauth1_flow()
+        if is_truthy(os.getenv("X_OAUTH_PRINT_TOKENS", "0")):
+            print("OAuth1 access token:", access_token)
+            print("OAuth1 access token secret:", access_secret)
     LOGGER.info("OAuth1 access token: %s", access_token)
     return OAuth1Client(
         client_key=consumer_key,
