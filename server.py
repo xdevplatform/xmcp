@@ -452,9 +452,18 @@ def create_mcp() -> FastMCP:
 
 
 def main() -> None:
+    # create_mcp() loads .env, so read transport/host/port after it to respect .env overrides.
+    mcp = create_mcp()
+    transport = os.getenv("MCP_TRANSPORT", "http").strip().lower()
+    if transport == "stdio":
+        mcp.run(transport="stdio")
+        return
+    if transport != "http":
+        raise RuntimeError(
+            f"Unsupported MCP_TRANSPORT={transport!r}. Use 'http' or 'stdio'."
+        )
     host = os.getenv("MCP_HOST", "127.0.0.1")
     port = int(os.getenv("MCP_PORT", "8000"))
-    mcp = create_mcp()
     mcp.run(transport="http", host=host, port=port)
 
 
