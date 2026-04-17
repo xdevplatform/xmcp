@@ -29,8 +29,9 @@ FastMCP. Streaming and webhook endpoints are excluded.
    - Server settings (optional):
      - `X_API_BASE_URL` (default `https://api.x.com`)
      - `X_API_TIMEOUT` (default `30`)
-     - `MCP_HOST` (default `127.0.0.1`)
-     - `MCP_PORT` (default `8000`)
+     - `MCP_TRANSPORT` (default `http`; set to `stdio` when launched by a local MCP client)
+     - `MCP_HOST` (default `127.0.0.1`; ignored in stdio mode)
+     - `MCP_PORT` (default `8000`; ignored in stdio mode)
      - `X_API_DEBUG` (default `1`)
   - Tool filtering (optional, comma-separated):
     - `X_API_TOOL_ALLOWLIST`
@@ -67,7 +68,10 @@ python server.py
 The MCP endpoint is `http://127.0.0.1:8000/mcp` by default.
 
 5. Connect an MCP client:
-- Local client: point it to `http://127.0.0.1:8000/mcp`.
+- Local HTTP client: point it to `http://127.0.0.1:8000/mcp`.
+- Local stdio client (Claude Code, Claude Desktop, etc.): set `MCP_TRANSPORT=stdio`
+  in `.env` and have the client spawn `python server.py` directly — the server
+  will speak JSON-RPC over stdin/stdout and ignore `MCP_HOST`/`MCP_PORT`.
 - Remote client: tunnel your local server (e.g., ngrok) and use the public URL.
 
 ## Whitelisting tools
