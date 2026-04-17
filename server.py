@@ -387,9 +387,20 @@ def create_mcp() -> FastMCP:
         request.url = request.url.copy_with(params=normalized)
 
     b3_flags = os.getenv("X_B3_FLAGS", "1")
+    oauth2_token = os.getenv("X_OAUTH2_ACCESS_TOKEN", "").strip()
 
     async def sign_oauth1_request(request: httpx.Request) -> None:
         request.headers["X-B3-Flags"] = b3_flags
+        # Prefer OAuth 2.0 user-context Bearer when available. OAuth 2.0
+        # supports everything OAuth 1.0a supports (posts, likes, follows)
+        # plus endpoints that reject OAuth 1.0a entirely — bookmarks,
+        # searchNews, and others that return 403 "Unsupported Authentication"
+        # under OAuth 1.0a.
+        if oauth2_token:
+            request.headers["Authorization"] = f"Bearer {oauth2_token}"
+            if print_oauth_header:
+                print("OAuth2 Bearer in use for this request.")
+            return
         headers = dict(request.headers)
         content_type = headers.get("Content-Type", "")
         body: str | None = None
