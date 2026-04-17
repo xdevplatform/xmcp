@@ -38,11 +38,14 @@ FastMCP. Streaming and webhook endpoints are excluded.
      - `XAI_API_KEY`
      - `XAI_MODEL` (default `grok-4-1-fast`)
      - `MCP_SERVER_URL` (default `http://127.0.0.1:8000/mcp`)
-   - Optional OAuth2 token generation:
-     - `CLIENT_ID`
-     - `CLIENT_SECRET`
+   - Optional OAuth 1.0a pre-provisioned user tokens (skip the browser flow at startup):
      - `X_OAUTH_ACCESS_TOKEN`
-    - `X_OAUTH_ACCESS_TOKEN_SECRET` (optional)
+     - `X_OAUTH_ACCESS_TOKEN_SECRET`
+   - Optional OAuth 2.0 user-context auth (see "Generate an OAuth 2.0 user token" below):
+     - `CLIENT_ID`
+     - `CLIENT_SECRET` (empty for public/PKCE-only clients)
+     - `X_OAUTH2_ACCESS_TOKEN`
+     - `X_OAUTH2_REFRESH_TOKEN`
    - Optional OAuth1 debug output:
      - `X_OAUTH_PRINT_TOKENS`
      - `X_OAUTH_PRINT_AUTH_HEADER`
@@ -214,13 +217,62 @@ Below is the full list of tool calls you can whitelist via
 - `updateActivitySubscription`
 - `updateLists`
 
-## Generate an OAuth2 user token (optional)
+## Generate an OAuth 2.0 user token (optional)
 
-1. Add `CLIENT_ID` and `CLIENT_SECRET` to your `.env`.
-2. Update `redirect_uri` in `generate_authtoken.py` to match your app settings.
-3. Run `python generate_authtoken.py` and follow the prompts.
-4. Copy the printed access token into `.env` as `X_OAUTH_ACCESS_TOKEN`.
-   If your flow returns a secret, store it as `X_OAUTH_ACCESS_TOKEN_SECRET`.
+Several X API endpoints — bookmarks (`getUsersBookmarks`, `createUsersBookmark`),
+`searchNews`, and others — reject OAuth 1.0a with a 403 `Unsupported
+Authentication` error. They require **OAuth 2.0 User Context**. Follow
+these steps to generate a user-context access token and have the server
+use OAuth 2.0 Bearer auth for all outbound requests.
+
+### 1. Configure your X Developer app for OAuth 2.0
+
+In the X Developer Portal → your app → **User authentication settings**:
+
+- App permissions: **Read and write and Direct message** (needed for
+  `bookmark.write`, `follows.write`, etc.).
+- Type of App: **Web App, Automated App or Bot** (confidential client).
+- Callback URI: `http://127.0.0.1:8976/oauth/callback` (the default;
+  matches `X_OAUTH_CALLBACK_*` in `.env`). Use a tailnet/LAN hostname
+  with HTTPS if you want to complete the browser flow from a different
+  device (see the TLS notes in the script docstring).
+- Website URL: any valid URL.
+- Enable OAuth 2.0.
+
+After saving, copy the **Client ID** and **Client Secret** from the
+Keys and Tokens tab.
+
+### 2. Populate `.env`
+
+```
+CLIENT_ID=<your client id>
+CLIENT_SECRET=<your client secret>
+```
+
+### 3. Run the token generator
+
+```
+python generate_oauth2_token.py
+```
+
+The script opens your browser for consent, listens on
+`X_OAUTH_CALLBACK_*` for the redirect, exchanges the authorization code
+for tokens, and writes `X_OAUTH2_ACCESS_TOKEN` + `X_OAUTH2_REFRESH_TOKEN`
+into `.env`. Requested scopes: `tweet.read tweet.write users.read
+follows.read follows.write offline.access bookmark.read bookmark.write
+like.read like.write list.read list.write`.
+
+### 4. Restart the server
+
+Whenever `X_OAUTH2_ACCESS_TOKEN` is set, `sign_oauth1_request` writes
+`Authorization: Bearer <token>` and skips OAuth 1.0a signing entirely.
+Unset it to fall back to OAuth 1.0a.
+
+Access tokens expire in 2 hours. The refresh token (granted via
+`offline.access`) can renew the access token without another browser
+round-trip; a helper for that is not yet included — re-run
+`generate_oauth2_token.py` when the token expires, or add your own
+refresh-flow script.
 
 ## Run the Grok MCP test client (optional)
 
