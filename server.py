@@ -307,7 +307,11 @@ def build_oauth1_client() -> OAuth1Client:
         raise RuntimeError(
             "Missing X_OAUTH_CONSUMER_KEY or X_OAUTH_CONSUMER_SECRET for OAuth1 signing."
         )
-    access_token, access_secret = run_oauth1_flow()
+    access_token = os.getenv("X_OAUTH_ACCESS_TOKEN", "").strip()
+    access_secret = os.getenv("X_OAUTH_ACCESS_TOKEN_SECRET", "").strip()
+    if not access_token or not access_secret:
+        access_token, access_secret = run_oauth1_flow()
+
     if is_truthy(os.getenv("X_OAUTH_PRINT_TOKENS", "0")):
         print("OAuth1 access token:", access_token)
         print("OAuth1 access token secret:", access_secret)
@@ -452,8 +456,8 @@ def create_mcp() -> FastMCP:
 
 
 def main() -> None:
-    host = os.getenv("MCP_HOST", "127.0.0.1")
-    port = int(os.getenv("MCP_PORT", "8000"))
+    host = os.getenv("MCP_HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", os.getenv("MCP_PORT", "8000")))
     mcp = create_mcp()
     mcp.run(transport="http", host=host, port=port)
 
