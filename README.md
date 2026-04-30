@@ -89,6 +89,19 @@ callback. Tokens are kept in memory only for the lifetime of the server
 process. Set `X_OAUTH_PRINT_TOKENS=1` to print tokens, or
 `X_OAUTH_PRINT_AUTH_HEADER=1` to print request headers.
 
+### Skipping the browser flow (for headless / hosted deploys)
+
+The interactive browser flow is unsuitable for non-interactive environments
+such as CI builds or hosted MCP runtimes (no display, no user, no inbound
+localhost callback). To skip it, run the flow once locally with
+`X_OAUTH_PRINT_TOKENS=1` to capture both tokens, then provide them via env:
+
+- `X_OAUTH_ACCESS_TOKEN`
+- `X_OAUTH_ACCESS_TOKEN_SECRET`
+
+When both are set, `build_oauth1_client` uses them directly and does not open
+a browser or contact `/oauth/request_token`.
+
 ## Available tool calls (allowlist-ready)
 
 Below is the full list of tool calls you can whitelist via
