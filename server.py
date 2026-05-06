@@ -235,6 +235,7 @@ def should_exclude_operation(path: str, operation: dict) -> bool:
 
 def filter_openapi_spec(spec: dict) -> dict:
     filtered = copy.deepcopy(spec)
+    normalize_known_spec_mismatches(filtered)
     paths = filtered.get("paths", {})
     new_paths = {}
     allow_tags = {tag.lower() for tag in parse_csv_env("X_API_TOOL_TAGS")}
@@ -269,6 +270,25 @@ def filter_openapi_spec(spec: dict) -> dict:
 
     filtered["paths"] = new_paths
     return filtered
+
+
+def normalize_known_spec_mismatches(spec: dict) -> None:
+    schemas = spec.get("components", {}).get("schemas", {})
+    news = schemas.get("News")
+    if not isinstance(news, dict):
+        return
+
+    required = news.get("required")
+    if isinstance(required, list) and "rest_id" in required:
+        required = [field for field in required if field != "rest_id"]
+        if required:
+            news["required"] = required
+        else:
+            news.pop("required", None)
+
+    properties = news.get("properties")
+    if isinstance(properties, dict) and "id" not in properties and "rest_id" in properties:
+        properties["id"] = copy.deepcopy(properties["rest_id"])
 
 
 def print_tool_list(spec: dict) -> None:
