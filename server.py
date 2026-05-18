@@ -311,7 +311,7 @@ def build_oauth1_client() -> OAuth1Client:
     if is_truthy(os.getenv("X_OAUTH_PRINT_TOKENS", "0")):
         print("OAuth1 access token:", access_token)
         print("OAuth1 access token secret:", access_secret)
-    LOGGER.info("OAuth1 access token: %s", access_token)
+    LOGGER.info("OAuth1 access token acquired.")
     return OAuth1Client(
         client_key=consumer_key,
         client_secret=consumer_secret,
