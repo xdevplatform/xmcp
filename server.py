@@ -308,10 +308,7 @@ def build_oauth1_client() -> OAuth1Client:
             "Missing X_OAUTH_CONSUMER_KEY or X_OAUTH_CONSUMER_SECRET for OAuth1 signing."
         )
     access_token, access_secret = run_oauth1_flow()
-    if is_truthy(os.getenv("X_OAUTH_PRINT_TOKENS", "0")):
-        print("OAuth1 access token:", access_token)
-        print("OAuth1 access token secret:", access_secret)
-    LOGGER.info("OAuth1 access token: %s", access_token)
+    # Do not log or print OAuth1 tokens — persistent credential leak risk.
     return OAuth1Client(
         client_key=consumer_key,
         client_secret=consumer_secret,
@@ -451,8 +448,21 @@ def create_mcp() -> FastMCP:
     )
 
 
+LOCAL_MCP_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def _validated_mcp_host() -> str:
+    host = os.getenv("MCP_HOST", "127.0.0.1").strip().lower()
+    if host not in LOCAL_MCP_HOSTS:
+        raise RuntimeError(
+            f"MCP_HOST={host} is not allowed. xmcp must bind to localhost only "
+            f"(127.0.0.1, localhost, ::1)."
+        )
+    return host
+
+
 def main() -> None:
-    host = os.getenv("MCP_HOST", "127.0.0.1")
+    host = _validated_mcp_host()
     port = int(os.getenv("MCP_PORT", "8000"))
     mcp = create_mcp()
     mcp.run(transport="http", host=host, port=port)
