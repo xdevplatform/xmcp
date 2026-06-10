@@ -1,0 +1,22 @@
+services:
+  xmcp:
+    build: .
+    container_name: xmcp
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "0.0.0.0:8010:8000"
+      - "127.0.0.1:8976:8976"
+    volumes:
+      - ./.env:/app/.env
+    networks:
+      default: {}
+      dify:
+        aliases:
+          - xmcp
+
+networks:
+  dify:
+    external: true
+    name: docker_default

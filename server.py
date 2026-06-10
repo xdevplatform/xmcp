@@ -47,6 +47,18 @@ def parse_csv_env(key: str) -> set[str]:
     return {item.strip() for item in raw.split(",") if item.strip()}
 
 
+def parse_csv_env_list(key: str, default: list[str] | None = None) -> list[str]:
+    raw = os.getenv(key, "")
+    if not raw.strip():
+        return default or []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def path_matches_prefix(path: str, prefix: str) -> bool:
+    normalized_prefix = prefix.rstrip("/")
+    return path == normalized_prefix or path.startswith(f"{normalized_prefix}/")
+
+
 def should_join_query_param(param: dict) -> bool:
     if param.get("in") != "query":
         return False
@@ -158,6 +170,7 @@ def run_oauth1_flow() -> tuple[str, str]:
         )
 
     callback_host = os.getenv("X_OAUTH_CALLBACK_HOST", "127.0.0.1")
+    callback_bind_host = os.getenv("X_OAUTH_CALLBACK_BIND_HOST", callback_host)
     callback_port = _get_env_int("X_OAUTH_CALLBACK_PORT", 8976)
     callback_path = os.getenv("X_OAUTH_CALLBACK_PATH", "/oauth/callback")
     callback_timeout = _get_env_int("X_OAUTH_CALLBACK_TIMEOUT", 300)
@@ -176,11 +189,13 @@ def run_oauth1_flow() -> tuple[str, str]:
         raise RuntimeError("Failed to obtain OAuth request token.")
 
     authorization_url = oauth.authorization_url(AUTHORIZE_URL)
+    print("OAuth1 authorization URL:", authorization_url, flush=True)
+    print("OAuth1 callback URL:", callback_url, flush=True)
     OAUTH_LOGGER.info("Opening browser for OAuth1 consent.")
     webbrowser.open(authorization_url)
 
     oauth_token, oauth_verifier = _wait_for_callback(
-        callback_host, callback_port, callback_path, callback_timeout
+        callback_bind_host, callback_port, callback_path, callback_timeout
     )
     if oauth_token != resource_owner_key:
         raise RuntimeError("OAuth callback token does not match request token.")
@@ -211,12 +226,64 @@ def load_env() -> None:
     load_dotenv(env_path, override=True)
 
 
+def persist_oauth1_tokens(access_token: str, access_secret: str) -> None:
+    if not is_truthy(os.getenv("X_OAUTH_PERSIST_TOKENS", "0")):
+        return
+
+    env_path = Path(__file__).resolve().parent / ".env"
+    existing_lines = env_path.read_text().splitlines() if env_path.exists() else []
+    updates = {
+        "X_OAUTH_ACCESS_TOKEN": access_token,
+        "X_OAUTH_ACCESS_TOKEN_SECRET": access_secret,
+    }
+    seen: set[str] = set()
+    next_lines: list[str] = []
+
+    for line in existing_lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in line:
+            next_lines.append(line)
+            continue
+        key = line.split("=", 1)[0].strip()
+        if key in updates:
+            next_lines.append(f"{key}={updates[key]}")
+            seen.add(key)
+        else:
+            next_lines.append(line)
+
+    for key, value in updates.items():
+        if key not in seen:
+            next_lines.append(f"{key}={value}")
+
+    env_path.write_text("\n".join(next_lines) + "\n")
+    env_path.chmod(0o600)
+    LOGGER.info("Persisted OAuth1 access token to %s", env_path)
+
+
 def setup_logging() -> bool:
     debug_enabled = is_truthy(os.getenv("X_API_DEBUG", "1"))
     if debug_enabled:
         logging.basicConfig(level=logging.INFO)
         LOGGER.setLevel(logging.INFO)
     return debug_enabled
+
+
+def build_mcp_auth_provider():
+    token = os.getenv("MCP_AUTH_TOKEN", "").strip()
+    if not token:
+        return None
+
+    from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
+
+    return StaticTokenVerifier(
+        tokens={
+            token: {
+                "client_id": "xmcp-client",
+                "scopes": ["xmcp:access"],
+            }
+        },
+        required_scopes=["xmcp:access"],
+    )
 
 
 def should_exclude_operation(path: str, operation: dict) -> bool:
@@ -307,11 +374,18 @@ def build_oauth1_client() -> OAuth1Client:
         raise RuntimeError(
             "Missing X_OAUTH_CONSUMER_KEY or X_OAUTH_CONSUMER_SECRET for OAuth1 signing."
         )
-    access_token, access_secret = run_oauth1_flow()
+    access_token = os.getenv("X_OAUTH_ACCESS_TOKEN", "").strip()
+    access_secret = os.getenv("X_OAUTH_ACCESS_TOKEN_SECRET", "").strip()
+    if access_token and access_secret:
+        LOGGER.info("Using OAuth1 access token from environment.")
+    else:
+        access_token, access_secret = run_oauth1_flow()
+        persist_oauth1_tokens(access_token, access_secret)
+
     if is_truthy(os.getenv("X_OAUTH_PRINT_TOKENS", "0")):
         print("OAuth1 access token:", access_token)
         print("OAuth1 access token secret:", access_secret)
-    LOGGER.info("OAuth1 access token: %s", access_token)
+
     return OAuth1Client(
         client_key=consumer_key,
         client_secret=consumer_secret,
@@ -354,6 +428,7 @@ def create_mcp() -> FastMCP:
     filtered_spec = filter_openapi_spec(spec)
     comma_params = collect_comma_params(filtered_spec)
     print_tool_list(filtered_spec)
+    auth_provider = build_mcp_auth_provider()
 
     async def normalize_query_params(request: httpx.Request) -> None:
         if not comma_params:
@@ -387,9 +462,19 @@ def create_mcp() -> FastMCP:
         request.url = request.url.copy_with(params=normalized)
 
     b3_flags = os.getenv("X_B3_FLAGS", "1")
+    bearer_auth_path_prefixes = tuple(
+        parse_csv_env_list("X_API_BEARER_AUTH_PATH_PREFIXES", ["/2/news"])
+    )
 
     async def sign_oauth1_request(request: httpx.Request) -> None:
         request.headers["X-B3-Flags"] = b3_flags
+        if any(path_matches_prefix(request.url.path, prefix) for prefix in bearer_auth_path_prefixes):
+            bearer_token = os.getenv("X_BEARER_TOKEN", "").strip()
+            if not bearer_token:
+                raise RuntimeError("X_BEARER_TOKEN is required for bearer-auth X API paths.")
+            request.headers["Authorization"] = f"Bearer {bearer_token}"
+            return
+
         headers = dict(request.headers)
         content_type = headers.get("Content-Type", "")
         body: str | None = None
@@ -448,6 +533,8 @@ def create_mcp() -> FastMCP:
         openapi_spec=filtered_spec,
         client=client,
         name="X API MCP",
+        auth=auth_provider,
+        validate_output=is_truthy(os.getenv("X_API_VALIDATE_OUTPUT", "0")),
     )
 
 
