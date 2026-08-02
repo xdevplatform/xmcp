@@ -1,5 +1,5 @@
-fastmcp
-httpx
+fastmcp>=4.0.0b1
+httpx2>=2.5.0
 python-dotenv
 requests-oauthlib
 xai-sdk

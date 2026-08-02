@@ -3,9 +3,14 @@
 Run a local MCP server that exposes the X API OpenAPI spec as tools using
 FastMCP. Streaming and webhook endpoints are excluded.
 
+Speaks the [`2026-07-28`](https://modelcontextprotocol.io/specification/2026-07-28/)
+MCP specification (the "MCP 2.0" revision) and still serves handshake-era
+clients on `2025-11-25` and earlier from the same endpoint. See
+[MCP protocol version](#mcp-protocol-version).
+
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.10+ (required by FastMCP 4)
 - An X Developer Platform app (to get tokens)
 - Optional: an xAI API key if you want to run the Grok test client
 
@@ -31,6 +36,7 @@ FastMCP. Streaming and webhook endpoints are excluded.
      - `X_API_TIMEOUT` (default `30`)
      - `MCP_HOST` (default `127.0.0.1`)
      - `MCP_PORT` (default `8000`)
+     - `MCP_CACHE_TTL` (default `300`; seconds, `0` disables)
      - `X_API_DEBUG` (default `1`)
   - Tool filtering (optional, comma-separated):
     - `X_API_TOOL_ALLOWLIST`
@@ -70,6 +76,40 @@ The MCP endpoint is `http://127.0.0.1:8000/mcp` by default.
 - Local client: point it to `http://127.0.0.1:8000/mcp`.
 - Remote client: tunnel your local server (e.g., ngrok) and use the public URL.
 
+## MCP protocol version
+
+The server implements the `2026-07-28` MCP specification, the revision the SDKs
+ship as their 2.0 major release. What that means here:
+
+- **Stateless.** There is no `initialize`/`initialized` handshake and no
+  `Mcp-Session-Id`. Every request carries its own protocol version, client
+  identity, and capabilities in `_meta`, so requests can be load balanced
+  round-robin across processes.
+- **Discovery.** `server/discover` returns the supported versions, capabilities,
+  and server identity in one request, with no prior handshake.
+- **Cacheable listings.** The tool set is derived from the OpenAPI spec once at
+  startup and is immutable for the life of the process, so `tools/list` and
+  `server/discover` carry a `ttlMs`/`cacheScope` hint. Tune it with
+  `MCP_CACHE_TTL` (seconds); `MCP_CACHE_TTL=0` leaves the protocol default of
+  `ttlMs: 0`, which tells clients the result is immediately stale. The hint is
+  only honored by `2026-07-28` clients that opt into caching.
+- **Backward compatible.** The same `/mcp` endpoint still serves clients that
+  use the older `initialize` handshake, including xAI's hosted MCP client used
+  by `test_grok_mcp.py`. No separate deployment is needed.
+
+Deprecated MCP features are not used by this server: it has no roots or
+sampling, and it logs to stderr through Python's `logging` rather than the
+deprecated MCP logging capability.
+
+Authorization to the MCP endpoint itself is unchanged — the server is meant to
+run locally and holds the X credentials itself, so the spec's authorization
+hardening (issuer validation, Client ID Metadata Documents) does not apply.
+If you expose this server publicly, put an authorizing proxy in front of it.
+
+FastMCP 4 is currently a beta (`4.0.0b1`); it is the first release that
+implements `2026-07-28`. `pip install -r requirements.txt` picks it up without
+`--pre` because the pin names the prerelease explicitly.
+
 ## Whitelisting tools
 
 Use `X_API_TOOL_ALLOWLIST` to load a small, explicit set of tools:
@@ -108,7 +148,6 @@ Below is the full list of tool calls you can whitelist via
 - `createMediaSubtitles`
 - `createPosts`
 - `createUsersBookmark`
-- `deleteActivitySubscription`
 - `deleteAllConnections`
 - `deleteCommunityNotes`
 - `deleteConnectionsByEndpoint`
@@ -122,8 +161,6 @@ Below is the full list of tool calls you can whitelist via
 - `finalizeMediaUpload`
 - `followList`
 - `followUser`
-- `getAccountActivitySubscriptionCount`
-- `getActivitySubscriptions`
 - `getChatConversation`
 - `getChatConversations`
 - `getCommunitiesById`
@@ -211,7 +248,6 @@ Below is the full list of tool calls you can whitelist via
 - `unmuteUser`
 - `unpinList`
 - `unrepostPost`
-- `updateActivitySubscription`
 - `updateLists`
 
 ## Generate an OAuth2 user token (optional)
@@ -233,8 +269,11 @@ Below is the full list of tool calls you can whitelist via
 
 ## Notes
 
-- Endpoints with `/stream` or `/webhooks` in the path are excluded.
-- Operations tagged `Stream` or `Webhooks`, or marked with
-  `x-twitter-streaming: true`, are excluded.
-- The OpenAPI spec is fetched from `https://api.twitter.com/2/openapi.json` at
+- Endpoints with `/stream`, `/webhooks`, `/account_activity`, or
+  `/activity/subscriptions` in the path are excluded.
+- Operations tagged `Stream`, `Webhooks`, `Activity`, or `Account Activity`, or
+  marked with `x-twitter-streaming: true`, are excluded. The activity
+  subscription endpoints configure webhook delivery, and most of them sit
+  outside the `/webhooks` path prefix.
+- The OpenAPI spec is fetched from `https://api.x.com/2/openapi.json` at
   startup.
