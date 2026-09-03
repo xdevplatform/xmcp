@@ -9,6 +9,16 @@ FastMCP. Streaming and webhook endpoints are excluded.
 - An X Developer Platform app (to get tokens)
 - Optional: an xAI API key if you want to run the Grok test client
 
+> [!NOTE]
+> SuperGrok and X Premium subscriptions are not currently accepted as
+> credentials by this server. The `X_OAUTH_*` and `X_BEARER_TOKEN` settings
+> below belong to an X Developer Platform app; they are separate from the xAI
+> OAuth login offered by supported subscription clients such as Hermes Agent.
+> Follow [issue #25](https://github.com/xdevplatform/xmcp/issues/25) for the
+> request to add an officially supported, subscription-backed, read-only X
+> Search mode. Do not copy browser cookies or relay undocumented tokens as a
+> workaround.
+
 ## Setup (local)
 
 1. Create a virtual environment and install dependencies:
